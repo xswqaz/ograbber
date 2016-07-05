@@ -1,0 +1,88 @@
+#!/usr/bin/ruby
+
+require 'open-uri'
+require 'nokogiri'
+require 'socket'
+require 'date'
+
+channel = {
+  "SBS" => 5,
+  "KBS1" => 9,
+  "KBS2" => 7,
+  "MBC" => 11,
+  "JTBC" => 15,
+  "tvN" => 17
+}
+
+date = Date.today
+yyyymmdd = date.strftime('%Y%m%d')
+ndate = Date.today + 1
+yyyymmdd2 = ndate.strftime('%Y%m%d')
+
+puts '<?xml version="1.0" encoding="UTF-8"?>'
+puts '<!DOCTYPE tv SYSTEM "xmltv.dtd">'
+puts '<tv source-info-url="http://tv.olleh.com" source-info-name="Olleh TV Guide" generator-info-name="o2xml">'
+
+channel.each do |station, ch|
+
+puts "<channel id=\"#{ch}\">"
+puts "  <display-name>#{station}</display-name>"
+puts '</channel>'
+
+end
+
+channel.each do |station, ch|
+
+url = "http://tv.olleh.com/renewal_sub/liveTv/pop_schedule_week.asp?ch_no=#{ch}&nowdate=#{yyyymmdd}"
+url2 = "http://tv.olleh.com/renewal_sub/liveTv/pop_schedule_week.asp?ch_no=#{ch}&nowdate=#{yyyymmdd2}"
+
+doc = Nokogiri::HTML(open(url))
+doc.encoding = 'utf-8'
+
+doc2 = Nokogiri::HTML(open(url2))
+doc2.encoding = 'utf-8'
+
+prevtime = 'null'
+prevtitle = 'null'
+
+hash = {}
+
+doc.css("table#pop_day.cocmBrdMessage.popSkyCh.cocmBrdList tr").each do |node|
+  time = node.css("td:eq(1)").inner_text
+  time = time.gsub(/:/, '')
+  title = node.css("td:eq(2)").inner_text
+  next if time == ""
+  hash.store("#{yyyymmdd}#{time}", title)
+end
+
+doc2.css("table#pop_day.cocmBrdMessage.popSkyCh.cocmBrdList tr").each_with_index do |node, index|
+  time = node.css("td:eq(1)").inner_text
+  time = time.gsub(/:/, '')
+  title = node.css("td:eq(2)").inner_text
+  next if time == ""
+  if index == 1
+    hash.store("#{yyyymmdd2}#{time}", title)
+  end
+end
+
+hash.each do |time, title|
+  if prevtitle != "null"
+    out = `find /mnt/hdd/mp4 -mtime -5 -print`.split("\n").grep(/#{title}/)
+    if out.length >= 1 then
+      title = "#{title}[재]"
+    end
+    title = title.gsub(/</,'[')
+    title = title.gsub(/>/,'[')
+    title = title.gsub(/&/,'')
+    puts "<programme start=\"#{prevtime}00 +0900\" stop=\"#{time}00 +0900\" channel=\"#{ch}\">"
+    puts "  <title lang=\"kr\">#{prevtitle}</title>"
+    puts "</programme>"
+  end
+  prevtime = time  
+  prevtitle = title
+end
+
+end
+
+puts '</tv>'
+
